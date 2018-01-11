@@ -1,0 +1,72 @@
+Day 1 - 搭建开发环境
+搭建开发环境
+
+首先，确认系统安装的Python版本是3.5.x：
+
+$ python3 --version
+Python 3.5.1
+
+然后，用pip安装开发Web App需要的第三方库：
+
+异步框架aiohttp：
+
+$pip3 install aiohttp
+
+前端模板引擎jinja2：
+
+$ pip3 install jinja2
+
+MySQL 5.x数据库，从官方网站下载并安装，安装完毕后，请务必牢记root口令。为避免遗忘口令，建议直接把root口令设置为password；
+
+MySQL的Python异步驱动程序aiomysql：
+
+$ pip3 install aiomysql
+
+项目结构
+
+选择一个工作目录，然后，我们建立如下的目录结构：
+
+awesome-python3-webapp/  <-- 根目录
+|
++- backup/               <-- 备份目录
+|
++- conf/                 <-- 配置文件
+|
++- dist/                 <-- 打包目录
+|
++- www/                  <-- Web目录，存放.py文件
+|  |
+|  +- static/            <-- 存放静态文件
+|  |
+|  +- templates/         <-- 存放模板文件
+|
++- ios/                  <-- 存放iOS App工程
+|
++- LICENSE               <-- 代码LICENSE
+
+创建好项目的目录结构后，建议同时建立git仓库并同步至GitHub，保证代码修改的安全。
+
+要了解git和GitHub的用法，请移步Git教程。
+开发工具
+
+自备，推荐用Sublime Text，请参考使用文本编辑器。
+
+Day 2 - 编写Web App骨架 app.py
+
+Day 3 - 编写ORM orm.py
+阅读: 221302
+
+在一个Web App中，所有数据，包括用户信息、发布的日志、评论等，都存储在数据库中。在awesome-python3-webapp中，我们选择MySQL作为数据库。
+
+Web App里面有很多地方都要访问数据库。访问数据库需要创建数据库连接、游标对象，然后执行SQL语句，最后处理异常，清理资源。
+这些访问数据库的代码如果分散到各个函数中，势必无法维护，也不利于代码复用。
+
+所以，我们要首先把常用的SELECT、INSERT、UPDATE和DELETE操作用函数封装起来。
+
+由于Web框架使用了基于asyncio的aiohttp，这是基于协程的异步模型。在协程中，不能调用普通的同步IO操作，
+因为所有用户都是由一个线程服务的，协程的执行速度必须非常快，才能处理大量用户的请求。
+而耗时的IO操作不能在协程中以同步的方式调用，否则，等待一个IO操作时，系统无法响应任何其他用户。
+
+这就是异步编程的一个原则：一旦决定使用异步，则系统每一层都必须是异步，“开弓没有回头箭”。
+
+幸运的是aiomysql为MySQL数据库提供了异步IO的驱动。
