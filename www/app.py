@@ -13,6 +13,12 @@ from aiohttp import web
 logging.basicConfig(level=logging.INFO)
 
 
+def timestamp2time(ts):
+    local_time = time.localtime(ts)
+    dt = time.strftime("%Y-%m-%d %H:%M:%S", local_time)
+    return dt
+
+
 def index(request):
     logging.info('request: {0}'.format(request))
     return web.Response(body=b'<h1>Awesome</h1>')
@@ -25,7 +31,7 @@ async def init(loop):
     logging.info('server started at http://127.0.0.1:9000...')
     return srv
 
-
+# print(timestamp2time(1515685403.75598))
 event_loop = asyncio.get_event_loop()
 event_loop.run_until_complete(init(event_loop))
 event_loop.run_forever()

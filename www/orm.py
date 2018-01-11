@@ -82,16 +82,16 @@ async def execute(sql, args, autocommit=True):
     """
     log(sql)
     global __pool
-    async with __pool.get() as conn:
+    async with __pool.get() as pool_connect:
         if not autocommit:
-            conn.begin()
+            pool_connect.begin()
         try:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(sql.replace('?', '%s'), args)
-                rows_affected = cur.rowcount()  # Returns the number of rows that has been produced of affected.
+            async with pool_connect.cursor(aiomysql.DictCursor) as pool_cur:
+                await pool_cur.execute(sql.replace('?', '%s'), args)
+                rows_affected = pool_cur.rowcount  # Returns the number of rows that has been produced of affected.
         except Exception as e:
             if not autocommit:
-                await conn.rollback()
+                await pool_connect.rollback()
             raise Exception(e)
         return rows_affected
 
@@ -371,3 +371,24 @@ class Model(dict, metaclass=ModelMetaclass):
 if __name__ == '__main__':
     f = IntegerField(name='id', default=500)
     print(f, f.default)
+
+    import pymysql
+    conn = pymysql.connect(
+        host='localhost',
+        port=3306,
+        user='root',
+        password='PEP-3156/tulip',
+        db='mysql',
+        charset='utf8'
+    )
+    cur = conn.cursor()
+    cur.execute("select version()")
+    for i in cur:
+        print(i)
+    cur.execute("use awesome")
+    cur.execute("select * from users")
+    print(cur.fetchall())
+    cur.close()
+    conn.close()
+
+
