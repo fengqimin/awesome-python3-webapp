@@ -51,7 +51,44 @@ awesome-python3-webapp/  <-- 根目录
 
 自备，推荐用Sublime Text，请参考使用文本编辑器。
 
+
 Day 2 - 编写Web App骨架 app.py
+由于我们的Web App建立在asyncio的基础上，因此用aiohttp写一个基本的app.py：
+
+import logging; logging.basicConfig(level=logging.INFO)
+
+import asyncio, os, json, time
+from datetime import datetime
+
+from aiohttp import web
+
+def index(request):
+    return web.Response(body=b'<h1>Awesome</h1>')
+
+@asyncio.coroutine
+def init(loop):
+    app = web.Application(loop=loop)
+    app.router.add_route('GET', '/', index)
+    srv = yield from loop.create_server(app.make_handler(), '127.0.0.1', 9000)
+    logging.info('server started at http://127.0.0.1:9000...')
+    return srv
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(init(loop))
+loop.run_forever()
+
+运行python app.py，Web App将在9000端口监听HTTP请求，并且对首页/进行响应：
+
+$ python3 app.py
+INFO:root:server started at http://127.0.0.1:9000...
+
+这里我们简单地返回一个Awesome字符串，在浏览器中可以看到效果：
+
+awesome-home
+
+这说明我们的Web App骨架已经搭好了，可以进一步往里面添加更多的东西。
+
+
 
 Day 3 - 编写ORM orm.py
 阅读: 221302
@@ -76,3 +113,55 @@ Day 4 - 编写Model
 阅读: 71713
 
 有了ORM，我们就可以把Web App需要的3个表用Model表示出来：
+
+Day 5 - 编写Web框架
+阅读: 84134
+
+在正式开始Web开发前，我们需要编写一个Web框架。
+
+aiohttp已经是一个Web框架了，为什么我们还需要自己封装一个？
+
+原因是从使用者的角度来说，aiohttp相对比较底层，编写一个URL的处理函数需要这么几步：
+
+第一步，编写一个用@asyncio.coroutine装饰的函数：
+
+@asyncio.coroutine
+def handle_url_xxx(request):
+    pass
+
+第二步，传入的参数需要自己从request中获取：
+
+url_param = request.match_info['key']
+query_params = parse_qs(request.query_string)
+
+最后，需要自己构造Response对象：
+
+text = render('template', data)
+return web.Response(text.encode('utf-8'))
+
+这些重复的工作可以由框架完成。例如，处理带参数的URL/blog/{id}可以这么写：
+
+@get('/blog/{id}')
+def get_blog(id):
+    pass
+
+处理query_string参数可以通过关键字参数**kw或者命名关键字参数接收：
+
+@get('/api/comments')
+def api_comments(*, page='1'):
+    pass
+
+对于函数的返回值，不一定是web.Response对象，可以是str、bytes或dict。
+
+如果希望渲染模板，我们可以这么返回一个dict：
+
+return {
+    '__template__': 'index.html',
+    'data': '...'
+}
+
+因此，Web框架的设计是完全从使用者出发，目的是让使用者编写尽可能少的代码。
+
+编写简单的函数而非引入request和web.Response还有一个额外的好处，就是可以单独测试，否则，需要模拟一个request才能测试。
+
+
