@@ -66,20 +66,22 @@ class Comment(Model):
 
 
 if __name__ == '__main__':
-    pass
-    # from orm import create_pool
-    # import asyncio
-    #
-    # async def test(loop):
-    #     await create_pool(loop, user='www-data', password='www-data', db='awesome')
-    #
-    #     u = User(name='Test2', email='test2@example.com', passwd='1234567890', image='about:blank')
-    #
-    #     await u.save()
-    #
-    #
-    # loop = asyncio.get_event_loop()
-    # loop.run_until_complete(test(loop))
+    from orm import create_pool
+    import asyncio
+    from config import configs
+
+    async def test(loop):
+        await create_pool(loop=loop, **configs.db)
+        print('create_pool')
+        users = await User.findall()
+        for user in users:
+            print(user)
+
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(test(loop))
+    loop.run_forever()
+    loop.stop()
 
 
 

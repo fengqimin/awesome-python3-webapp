@@ -29,7 +29,7 @@ def get(path='/'):
             return func(*args, **kwargs)
 
         wrapper.__method__ = 'GET'  # 附带的请求方式
-        wrapper.__router__ = path  # 附带的URL信息
+        wrapper.__route__ = path  # 附带的URL信息
         return wrapper
 
     if isinstance(path, str):
@@ -52,7 +52,7 @@ def post(path='/'):
             return func(*args, **kwargs)
 
         wrapper.__method__ = 'POST'
-        wrapper.__router__ = path
+        wrapper.__route__ = path
         return wrapper
 
     if isinstance(path, str):
@@ -302,11 +302,12 @@ class RequestHandler(object):
                 copy = dict()
                 # 只保留命名关键词参数
                 for name in self._named_kw_args:
-                    copy[name] = kwargs[name]
-                kwargs = copy
+                    if name in kwargs:
+                        copy[name] = kwargs[name]
+                kwargs = copy  # kw中只存在命名关键词参数
             # 将request.match_info中的参数传入kwargs
             for k, v in request.match_info.items():
-                if k in kwargs.keys():
+                if k in kwargs:
                     logging.warning('Duplicate arg name in named arg and kw args: %s' % k)
                 kwargs[k] = v
         # 有请求参数，把请求信息装入参数字典
@@ -339,60 +340,111 @@ def add_static(app):
     :return:
     """
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-    app.router.add
-    pass
+    app.router.add_static('/static/', path)
+    """
+        def add_static(self, prefix, path, *, name=None, expect_handler=None,
+                   chunk_size=256 * 1024,
+                   show_index=False, follow_symlinks=False,
+                   append_version=False):
+        Add static files view.
+
+        prefix - url prefix
+        path - folder with files
+        aiohttp.web_urldispatcher
+    """
+    logging.info('add static files view %s -> %s' % ('/static/', path))
+
+
+def add_route(app, fn):
+    """
+    注册视图url处理函数
+
+    :param app:the web.application
+    :param fn:the url func
+    :return:None
+    """
+    method = getattr(fn, '__method__', None)
+    path = getattr(fn, '__route__', None)
+
+    # method and path不能为None，否则报错
+    if method and path:
+        # 判断URL处理函数是否协程并且是生成器
+        if not asyncio.iscoroutinefunction(fn) and not inspect.isgeneratorfunction(fn):
+            # 将fn转变成协程
+            fn = asyncio.coroutine(fn)
+        logging.info(
+            'add route %s %s -> %s(%s)'
+            % (method, path, fn.__name__, ', '.join(inspect.signature(fn).parameters.keys())))
+        app.router.add_route(method, path, RequestHandler(app, fn))
+        print(fn)
+        """
+         def add_route(self, method, path, handler,
+                       *, name=None, expect_handler=None):
+             resource = self.add_resource(path, name=name)
+             return resource.add_route(method, handler,
+                                       expect_handler=expect_handler)
+        """
+    else:
+        raise ValueError('@get or @post not defined in %s.' % str(fn))
+
+
+# 最后一步，把很多次add_route()注册的调用：
+#   add_route(app, handles.index)
+#   add_route(app, handles.blog)
+#   add_route(app, handles.create_comment)
+#   ...
+#
+# 变成自动扫描：
+#   自动把handler模块的所有符合条件的函数注册了:
+#   add_routes(app, 'handlers')
+
+def add_routes(app, module_name):
+    """
+    导入模块，批量注册视图url处理函数
+    :param app:
+    :param module_name:模块名称
+    :return:None
+    """
+    n = module_name.rfind('.')
+    if n == -1:  # 没有.，导入整个模块
+        mod = __import__(module_name, globals(), locals())  # 等价于import module_name
+        """
+        __import__(name, globals=None, locals=None, fromlist=(), level=0) -> module
+
+        Import a module. Because this function is meant for use by the Python
+        interpreter and not for general use it is better to use
+        importlib.import_module() to programmatically import a module.
+
+        The globals argument is only used to determine the context;
+        they are not modified.  The locals argument is unused.  The fromlist
+        should be a list of names to emulate ``from name import ...'', or an
+        empty list to emulate ``import name''.
+        When importing a module from a package, note that __import__('A.B', ...)
+        returns package A when fromlist is empty, but its submodule B when
+        fromlist is not empty.  Level is used to determine whether to perform 
+        absolute or relative imports. 0 is absolute while a positive number
+        is the number of parent directories to search relative to the current module.
+        """
+    else:  # 如果导入模块其中的部分方法
+        name = module_name[n+1:]
+        mod = getattr(__import__(module_name[:n], globals(), locals(), [name]), name)  # 等价于import module_name.name
+    # 注册模块中的所有方法，视图url处理函数
+    for attr in dir(mod):
+        # 是特殊的方法名，跳过
+        if attr.startswith('_'):
+            continue
+        fn = getattr(mod, attr)
+        if callable(fn):
+            method = getattr(fn, '__method__', None)
+            path = getattr(fn, '__route__', None)
+            # 有'__method__' and '__route__'的才注册为视图url处理函数
+            if method and path:
+                add_route(app, fn)
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
-    def fn( a, request, *args, c=1, d, **kwargs):
-        pass
 
-
-    async def re(request, *args, c=1, d, **kwargs):
-        pass
-
-
-    import urllib.request
-    req = urllib.request.Request(
-        'http://localhost:8000/frank?mod=forumdisplay&fid=30&filter=author&orderby=dateline',
-        method='GET'
-    )
-    # print(get_named_kw_args(fn))
-    # print(get_required_kw_args(fn))
-    # print(has_named_kw_args(fn))
-    # print(has_var_kw_arg(fn))
-    # print(has_request_arg(fn))
-
-    # print(req.method)
-    event_loop = asyncio.get_event_loop()
-    app = web.Application(loop=event_loop)
-    rh = RequestHandler(app, fn)
-    event_loop.run_until_complete(rh(req))
-    event_loop.close()
-
-
-    # class Fib(object):
-    #     def __init__(self):
-    #         pass
-    #
-    #     def __call__(self, num):
-    #         a, b = 0, 1;
-    #         self.l = []
-    #
-    #         for i in range(num):
-    #             self.l.append(a)
-    #             a, b = b, a + b
-    #         print(self.l)
-    #         return self.l
-    #
-    #     def __str__(self):
-    #         return str(self.l)
-    #
-    #     __repr__ = __str__
-    #
-    #
-    # f = Fib()
-    # f(10)
 
 

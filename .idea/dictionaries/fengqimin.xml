@@ -2,6 +2,8 @@
   <dictionary name="fengqimin">
     <words>
       <w>blogs</w>
+      <w>orderby</w>
+      <w>urldispatcher</w>
     </words>
   </dictionary>
 </component>

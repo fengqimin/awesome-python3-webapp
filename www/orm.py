@@ -51,9 +51,13 @@ async def select(sql, args, size=None):
     log(sql, args)
     global __pool
     async with __pool.get() as conn:
-        async with conn.cursor() as cur:
+        # 创建一个DictCursor类指针，返回dict形式的结果集
+        # 以上下文方式创建cur指针，无需再调用cur.close()
+        # print(__pool)
+        async with conn.cursor(aiomysql.DictCursor) as cur:
             # SQL语句的占位符是?，而MySQL的占位符是 % s，select() 函数在内部自动替换。
             # 注意要始终坚持使用带参数的SQL，而不是自己拼接SQL字符串，这样可以防止SQL注入攻击。
+            print(sql.replace('?', '%s'))
             await cur.execute(sql.replace('?', '%s'), args or ())
             if size:
                 result = await cur.fetchmany(size)
@@ -194,7 +198,7 @@ class ModelMetaclass(type):
 
 
     """
-    def __new__(cls, name, bases, attrs):
+    def __new__(mcs, name, bases, attrs):
         """
 
         :param name:``str`` the name of table
@@ -204,7 +208,7 @@ class ModelMetaclass(type):
         """
         # 排除Model类本身
         if name == 'Model':
-            return type.__new__(cls, name, bases, attrs)
+            return type.__new__(mcs, name, bases, attrs)
 
         # 获取table名称:
         table_name = attrs.get('__table__', None) or name
@@ -216,8 +220,9 @@ class ModelMetaclass(type):
         primary_key = None
         for k, v in attrs.items():
             if isinstance(v, Field):  # 如果是Field类就保存到映射关系中
-                mappings[k] = v
                 logging.info(' found mapping %s->%s' % (k, v))
+                mappings[k] = v
+
                 # 找到主键:
                 if v.primary_key:
                     # 检查主键是否重复
@@ -234,15 +239,17 @@ class ModelMetaclass(type):
             attrs.pop(k)
 
         # 把fields列表中的内容添加``后映射到escaped_fields列表中
+        # 反引号``区分MYSQL的保留字与普通字符而引入的符号,如果`select`字段，不用反引号，MYSQL将把select视为保留字而导致出错
         escaped_fields = list(map(lambda f: '`%s`' % f, fields))
 
         # 保存属性字典
         attrs['__mappings__'] = mappings  # 保存属性和列的映射关系
-        attrs['__table__'] = name  # 假设表名和类名一致
+        attrs['__table__'] = table_name  # 假设表名和类名一致
         attrs['__primary_key__'] = primary_key   # 主键属性名
         attrs['__fields__'] = fields  # 除主键外的属性名
 
         # 构造默认的SELECT, INSERT, UPDATE和DELETE语句:
+
         attrs['__select__'] = 'select `%s`, %s from `%s`' % (primary_key, ', '.join(escaped_fields), table_name)
         attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values (%s)' % (
             table_name, ', '.join(escaped_fields),
@@ -251,7 +258,7 @@ class ModelMetaclass(type):
             table_name, ', '.join(map(lambda f: '`%s`=?' % (mappings.get(f).name or f), fields)), primary_key)
         attrs['__delete__'] = 'delete from `%s` where `%s`=?' % (table_name, primary_key)
         # print(attrs.items())
-        return type.__new__(cls, name, bases, attrs)
+        return type.__new__(mcs, name, bases, attrs)
 
 
 class Model(dict, metaclass=ModelMetaclass):
@@ -287,10 +294,10 @@ class Model(dict, metaclass=ModelMetaclass):
     def __setattr__(self, key, value):
         self[key] = value
 
-    def getValue(self, key):
+    def get_value(self, key):
         return getattr(self, key, None)
 
-    def getValueOrDefault(self, key):
+    def get_value_or_default(self, key):
         value = getattr(self, key, None)
         if value is None:
             field = self.__mappings__[key]
@@ -301,18 +308,18 @@ class Model(dict, metaclass=ModelMetaclass):
         return value
 
     @classmethod
-    async def findAll(cls, where=None, args=None, **kw):
-        """ find objects by where clause. """
+    async def findall(cls, where=None, args=None, **kw):
+        """ find objects by WHERE clause. """
         sql = [cls.__select__]
         if where:
             sql.append('where')
             sql.append(where)
         if args is None:
             args = []
-        orderBy = kw.get('orderBy', None)
-        if orderBy:
+        orderby = kw.get('orderBy', None)
+        if orderby is not None:
             sql.append('order by')
-            sql.append(orderBy)
+            sql.append(orderby)
         limit = kw.get('limit', None)
         if limit is not None:
             sql.append('limit')
@@ -325,6 +332,7 @@ class Model(dict, metaclass=ModelMetaclass):
             else:
                 raise ValueError('Invalid limit value: %s' % str(limit))
         rs = await select(' '.join(sql), args)
+        # 将返回的结果迭代生成类的实例，返回的都是实例对象, 而非仅仅是数据
         return [cls(**r) for r in rs]
 
     @classmethod
@@ -348,21 +356,21 @@ class Model(dict, metaclass=ModelMetaclass):
         return cls(**rs[0])
 
     async def save(self):
-        args = list(map(self.getValueOrDefault, self.__fields__))
-        args.append(self.getValueOrDefault(self.__primary_key__))
+        args = list(map(self.get_value_or_default, self.__fields__))
+        args.append(self.get_value_or_default(self.__primary_key__))
         rows = await execute(self.__insert__, args)
         if rows != 1:
             logging.warning('failed to insert record: affected rows: %s' % rows)
 
     async def update(self):
-        args = list(map(self.getValue, self.__fields__))
-        args.append(self.getValue(self.__primary_key__))
+        args = list(map(self.get_value, self.__fields__))
+        args.append(self.get_value(self.__primary_key__))
         rows = await execute(self.__update__, args)
         if rows != 1:
             logging.warning('failed to update by primary key: affected rows: %s' % rows)
 
     async def remove(self):
-        args = [self.getValue(self.__primary_key__)]
+        args = [self.get_value(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
         if rows != 1:
             logging.warning('failed to remove by primary key: affected rows: %s' % rows)
