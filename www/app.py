@@ -4,23 +4,23 @@
 用aiohttp写一个基本的app.py
 Web App将在9000端口监听HTTP请求，并且对首页/进行响应
 """
-import logging
 
-import asyncio, os, json, time
+import asyncio
+import json
+import logging
+import os
+import time
 from datetime import datetime
 
 from aiohttp import web
 from jinja2 import Environment, FileSystemLoader
-
-from config import configs
-
 import orm
+from config import configs
 from coroweb import add_routes, add_static
-
+#
 # from handlers import cookie2user, COOKIE_NAME
-
-
-logging.basicConfig(level=logging.INFO)
+#
+# logging.basicConfig(level=logging.INFO)
 
 
 def init_jinja2(app, **kwargs):
@@ -38,12 +38,12 @@ def init_jinja2(app, **kwargs):
     """
     logging.info('init jinja2...')
     options = dict(
-        autoescape = kwargs.get('autoescape', True),
-        block_start_string = kwargs.get('block_start_string', '{%'),
-        block_end_string = kwargs.get('block_end_string', '%}'),
-        variable_start_string = kwargs.get('variable_start_string', '{{'),
-        variable_end_string = kwargs.get('variable_end_string', '}}'),
-        auto_reload = kwargs.get('auto_reload', True)
+        autoescape=kwargs.get('autoescape', True),
+        block_start_string=kwargs.get('block_start_string', '{%'),
+        block_end_string=kwargs.get('block_end_string', '%}'),
+        variable_start_string=kwargs.get('variable_start_string', '{{'),
+        variable_end_string=kwargs.get('variable_end_string', '}}'),
+        auto_reload=kwargs.get('auto_reload', True)
     )
     path = kwargs.get('path', None)
     if path is None:
@@ -67,6 +67,7 @@ def init_jinja2(app, **kwargs):
 # 时间过滤器，显示登录时间
 def datetime_filter(t):
     delta = int(time.time() - t)
+    logging.debug('%s' % delta)
     if delta < 60:
         return u'1分钟前'
     if delta < 3600:
@@ -92,12 +93,54 @@ async def logger_factory(app, handler):
     :param handler:
     :return:
     """
+
     async def logger(request):
         # 记录日志:
         logging.info('Request: %s %s' % (request.method, request.path))
         # 继续处理请求:
         return await handler(request)
+
     return logger
+
+
+async def auth_factory(app, handler):
+    """
+    对于每个URL处理函数，如果我们都去写解析cookie的代码，那会导致代码重复很多次。
+    利用middle在处理URL之前，把cookie解析出来，并将登录用户绑定到request对象上，这样，后续的URL处理函数就可以直接拿到登录用户。
+    :param app:
+    :param handler:
+    :return:
+    """
+    from handlers import cookie2user, COOKIE_NAME
+    async def auth(request):
+        logging.info('check user: %s %s' % (request.method, request.path))
+        request.__user__ = None
+        cookie_str = request.cookies.get(COOKIE_NAME)
+        if cookie_str:
+            user = await cookie2user(cookie_str)
+            if user:
+                logging.info('set current user: %s' % user.email)
+                request.__user__ = user
+        if request.path.startswith('/manage/') and (request.__user__ is None or (not request.__user__.admin)):
+            return web.HTTPFound('/signin')
+        return await handler(request)
+
+    return auth
+
+
+async def data_factory(app, handler):
+
+    async def parse_data(request):
+        if request.method == 'POST':
+            if request.content_type.startswith('application/json'):
+                request.__data__ = await request.json()
+                logging.info('request json: %s' % str(request.__data__))
+            elif request.content_type.startswith('application/x-www-form-urlencoded'):
+                request.__data__ = await request.post()
+                logging.info('request form: %s' % str(request.__data__))
+        return await handler(request)
+
+    return parse_data
 
 
 async def response_factory(app, handler):
@@ -106,23 +149,6 @@ async def response_factory(app, handler):
     :param app:
     :param handler:
     :return:
-
-    text/plain（纯文本）
-    text/html（HTML文档）
-    application/xhtml+xml（XHTML文档）
-    image/gif（GIF图像）
-    image/jpeg（JPEG图像）【PHP中为：image/pjpeg】
-    image/png（PNG图像）【PHP中为：image/x-png】
-    video/mpeg（MPEG动画）
-    application/octet-stream（任意的二进制数据）
-    application/pdf（PDF文档）
-    application/msword（Microsoft Word文件）
-    application/vnd.wap.xhtml+xml (wap1.0+)
-    application/xhtml+xml (wap2.0+)
-    message/rfc822（RFC 822形式）
-    multipart/alternative（HTML邮件的HTML形式和纯文本形式，相同内容使用不同形式表示）
-    application/x-www-form-urlencoded（使用HTTP的POST方法提交的表单）
-    multipart/form-data（同上，但主要用于表单提交时伴随文件上传的场合）
     """
     async def response(request):
         logging.info('Response handler...')
@@ -154,7 +180,7 @@ async def response_factory(app, handler):
                     body=json.dumps(
                         result,
                         ensure_ascii=False,
-                        default=lambda o: o.__dict__).encode('utf-'))
+                        default=lambda o: o.__dict__).encode('utf-8'))
                 resp.content_type = 'application/json;charset=utf-8'
                 return resp
             else:  # 有模板
@@ -178,6 +204,7 @@ async def response_factory(app, handler):
         resp = web.Response(body=str(result).encode('utf-8'))  # 均以上条件不满足，默认返回
         resp.content_type = 'text/plain;charset=utf-8'  # utf-8纯文本
         return resp
+
     return response
 
 
@@ -187,26 +214,28 @@ def timestamp2time(ts):
     return dt
 
 
-async def init(loop):
+async def init(loop, host='127.0.0.1', port=9000):
     """
-
+    init web app
     :param loop:
+    :param host:
+    :param port:
     :return:
     """
     await orm.create_pool(loop=loop, **configs.db)
-    app = web.Application(loop=loop, middlewares=[logger_factory, response_factory])
+    app = web.Application(
+        loop=loop,
+        middlewares=[logger_factory, auth_factory, response_factory])
     init_jinja2(app, filters=dict(datetime=datetime_filter))
-    # app.router.add_route('GET', '/', index)
     add_routes(app, 'handlers')
-    add_static(app)
-    srv = await loop.create_server(app.make_handler(), '127.0.0.1', 9000)
-    logging.info('server started at http://127.0.0.1:9000...')
+    # add_static(app)
+    srv = await loop.create_server(app.make_handler(), host, port)
+    logging.info('server started at http://%s:%s...' % (host, port))
     return srv
 
 
 if __name__ == '__main__':
-    # print(timestamp2time(1515685403.75598))
+    logging.basicConfig(level=logging.DEBUG)
     event_loop = asyncio.get_event_loop()
     event_loop.run_until_complete(init(event_loop))
     event_loop.run_forever()
-

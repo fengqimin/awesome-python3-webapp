@@ -57,13 +57,13 @@ async def select(sql, args, size=None):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             # SQL语句的占位符是?，而MySQL的占位符是 % s，select() 函数在内部自动替换。
             # 注意要始终坚持使用带参数的SQL，而不是自己拼接SQL字符串，这样可以防止SQL注入攻击。
-            print(sql.replace('?', '%s'))
+            logging.debug(sql.replace('?', '%s'))
             await cur.execute(sql.replace('?', '%s'), args or ())
             if size:
                 result = await cur.fetchmany(size)
             else:
                 result = await cur.fetchall()
-        logging.info('rows returned: %s' % len(result))
+        logging.info('rows returned: %s,result is %s' % (len(result), result))
         return result
 
 
@@ -336,14 +336,15 @@ class Model(dict, metaclass=ModelMetaclass):
         return [cls(**r) for r in rs]
 
     @classmethod
-    async def findNumber(cls, selectField, where=None, args=None):
-        ' find number by select and where. '
-        sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]
+    async def findNumber(cls, select_field, where=None, args=None):
+        """ find number by select and where. """
+        sql = ['select %s _num_ from `%s`' % (select_field, cls.__table__)]
         if where:
             sql.append('where')
             sql.append(where)
         rs = await select(' '.join(sql), args, 1)
-        if len(rs) == 0:
+        logging.debug('findNumber is called.')
+        if rs is None:
             return None
         return rs[0]['_num_']
 
@@ -359,6 +360,7 @@ class Model(dict, metaclass=ModelMetaclass):
         args = list(map(self.get_value_or_default, self.__fields__))
         args.append(self.get_value_or_default(self.__primary_key__))
         rows = await execute(self.__insert__, args)
+        logging.debug('save is called.')
         if rows != 1:
             logging.warning('failed to insert record: affected rows: %s' % rows)
 
@@ -378,7 +380,8 @@ class Model(dict, metaclass=ModelMetaclass):
 
 if __name__ == '__main__':
     f = IntegerField(name='id', default=500)
-    print(f, f.default)
+    # print(f, f.default)
+
 
     import pymysql
     conn = pymysql.connect(
@@ -391,10 +394,12 @@ if __name__ == '__main__':
     )
     cur = conn.cursor()
     cur.execute("select version()")
+    print('log')
     for i in cur:
-        print(i)
+         logging.info(i)
     cur.execute("use awesome")
     cur.execute("select * from users")
+    print('end')
     print(cur.fetchall())
     cur.close()
     conn.close()

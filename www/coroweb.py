@@ -11,12 +11,12 @@ import logging
 import asyncio
 
 
-# from apis import APIERROR
+from apis import APIError
 
 
 # 建立视图url函数装饰器，用来附带URL信息
 # @get
-def get(path='/'):
+def get(path):
     """
     定义一个装饰器@get('/path')，把一个函数映射为一个URL处理函数
     :param:path ``str`` the path of url
@@ -32,14 +32,11 @@ def get(path='/'):
         wrapper.__route__ = path  # 附带的URL信息
         return wrapper
 
-    if isinstance(path, str):
-        return decorator
-    else:
-        return decorator(path)
+    return decorator
 
 
 # @post
-def post(path='/'):
+def post(path):
     """
     定义一个装饰器@post('/path')，把一个函数映射为一个URL处理函数
     :param:path ``str`` the path of url
@@ -55,10 +52,7 @@ def post(path='/'):
         wrapper.__route__ = path
         return wrapper
 
-    if isinstance(path, str):
-        return decorator
-    else:
-        return decorator(path)
+    return decorator
 
 
 """
@@ -251,7 +245,6 @@ class RequestHandler(object):
         """
         # 1.定义kw，用于保存参数
         kwargs = None
-        logging.debug('kwargs = None')
         # 2.判断url函数是否存在关键词参数，如果存在根据POST或者GET方法将request请求内容保存到kwargs
         if self._has_named_kw_args or self._has_var_kw_arg or self._required_kw_args:
             if request.method == 'POST':
@@ -275,7 +268,7 @@ class RequestHandler(object):
                     # 对于其他格式数据不予支持，报400错误
                     return web.HTTPBadRequest(text='Unsupported Content-Type: %s' % request.content_type)
 
-            elif request.method == 'GET':
+            if request.method == 'GET':
                 logging.debug('GET')
 
                 # 返回URL的查询字符串，?后的键值。形如mod=forumdisplay& &fid=30&page=1&filter=author&orderby=dateline
@@ -286,12 +279,9 @@ class RequestHandler(object):
                     # parse_qs()解析的字典中value为列表，需要处理
                     for k, v in parse.parse_qs(query_string, True).items():  # keep_blank_values=True
                         kwargs[k] = v[0]
-            else:  # 对其他请求方式不处理
-                pass
 
         # 如果kwargs为空，表示request中没有参数
         if kwargs is None:
-            logging.debug('kwargs is None')
             # request.match_info返回dict对象,封装了与 request 的 path 和 method 完全匹配的 PlainResource 对象
             # 可变路由中的可变字段{variable}为参数名，传入request请求的path为值
             # 若存在可变路由：/a/{name}/c，可匹配path为：/a/jack/c的request,则request.match_info返回{name = jack}
@@ -327,10 +317,8 @@ class RequestHandler(object):
         try:
             r = await self._func(**kwargs)
             return r
-        # except APIError as e:
-        #     return dict(error=e.error, data=e.data, message=e.message)
-        except Exception as e:
-            return dict(error=e)
+        except APIError as e:
+            return dict(error=e.error, data=e.data, message=e.message)
 
 
 def add_static(app):
@@ -339,20 +327,37 @@ def add_static(app):
     :param app:
     :return:
     """
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-    app.router.add_static('/static/', path)
-    """
-        def add_static(self, prefix, path, *, name=None, expect_handler=None,
-                   chunk_size=256 * 1024,
-                   show_index=False, follow_symlinks=False,
-                   append_version=False):
-        Add static files view.
-
-        prefix - url prefix
-        path - folder with files
-        aiohttp.web_urldispatcher
-    """
-    logging.info('add static files view %s -> %s' % ('/static/', path))
+    # Warning:
+    # use add_static() for development only.
+    # In production, static content should be processed by web servers like nginx or apache.
+    pass
+    # path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+    # css_path = os.path.join(path, 'css', )
+    # font_path = os.path.join(path, 'fonts')
+    # js_path = os.path.join(path, 'js')
+    # img_path = os.path.join(path, 'img')
+    # # app.router.add_static('/static/', path)
+    # app.router.add_static('/css/', css_path)
+    # app.router.add_static('/fonts/', font_path)
+    # app.router.add_static('/js/', js_path)
+    # app.router.add_static('/img/', img_path)
+    #
+    # """
+    #     def add_static(self, prefix, path, *, name=None, expect_handler=None,
+    #                chunk_size=256 * 1024,
+    #                show_index=False, follow_symlinks=False,
+    #                append_version=False):
+    #     Add static files view.
+    #
+    #     prefix - url prefix
+    #     path - folder with files
+    #     aiohttp.web_urldispatcher
+    # """
+    # logging.info('add static files view %s -> %s' % ('/static/', path))
+    # logging.info('add static files view %s -> %s' % ('/css/', css_path))
+    # logging.info('add static files view %s -> %s' % ('/fonts/', font_path))
+    # logging.info('add static files view %s -> %s' % ('/js/', js_path))
+    # logging.info('add static files view %s -> %s' % ('/img/', img_path))
 
 
 def add_route(app, fn):
@@ -367,25 +372,25 @@ def add_route(app, fn):
     path = getattr(fn, '__route__', None)
 
     # method and path不能为None，否则报错
-    if method and path:
-        # 判断URL处理函数是否协程并且是生成器
-        if not asyncio.iscoroutinefunction(fn) and not inspect.isgeneratorfunction(fn):
-            # 将fn转变成协程
-            fn = asyncio.coroutine(fn)
-        logging.info(
-            'add route %s %s -> %s(%s)'
-            % (method, path, fn.__name__, ', '.join(inspect.signature(fn).parameters.keys())))
-        app.router.add_route(method, path, RequestHandler(app, fn))
-        print(fn)
-        """
-         def add_route(self, method, path, handler,
-                       *, name=None, expect_handler=None):
-             resource = self.add_resource(path, name=name)
-             return resource.add_route(method, handler,
-                                       expect_handler=expect_handler)
-        """
-    else:
+    if method is None or (path is None):
         raise ValueError('@get or @post not defined in %s.' % str(fn))
+
+    # 判断URL处理函数是否协程并且是生成器
+    if not asyncio.iscoroutinefunction(fn) and (not inspect.isgeneratorfunction(fn)):
+        # 将fn转变成协程
+        fn = asyncio.coroutine(fn)
+    logging.info(
+        'add route %s %s -> %s(%s)'
+        % (method, path, fn.__name__, ', '.join(inspect.signature(fn).parameters.keys())))
+
+    app.router.add_route(method, path, RequestHandler(app, fn))
+    """
+     def add_route(self, method, path, handler,
+                   *, name=None, expect_handler=None):
+         resource = self.add_resource(path, name=name)
+         return resource.add_route(method, handler,
+                                   expect_handler=expect_handler)
+    """
 
 
 # 最后一步，把很多次add_route()注册的调用：
@@ -406,7 +411,7 @@ def add_routes(app, module_name):
     :return:None
     """
     n = module_name.rfind('.')
-    if n == -1:  # 没有.，导入整个模块
+    if n == (-1):  # 没有.，导入整个模块
         mod = __import__(module_name, globals(), locals())  # 等价于import module_name
         """
         __import__(name, globals=None, locals=None, fromlist=(), level=0) -> module
@@ -443,7 +448,7 @@ def add_routes(app, module_name):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    pass
 
 
 
