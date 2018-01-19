@@ -227,7 +227,7 @@ Day 7 - 编写MVC
 
 @get('/')
 def index(request):
-    users = yield from User.findAll()
+    users = yield from User.findall()
     return {
         '__template__': 'test.html',
         'users': users
@@ -542,7 +542,7 @@ def api_get_users(*, page='1'):
     p = Page(num, page_index)
     if num == 0:
         return dict(page=p, users=())
-    users = yield from User.findAll(orderBy='created_at desc', limit=(p.offset, p.limit))
+    users = yield from User.findall(orderBy='created_at desc', limit=(p.offset, p.limit))
     for u in users:
         u.passwd = '******'
     return dict(page=p, users=users)

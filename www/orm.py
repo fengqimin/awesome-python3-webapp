@@ -57,7 +57,6 @@ async def select(sql, args, size=None):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             # SQL语句的占位符是?，而MySQL的占位符是 % s，select() 函数在内部自动替换。
             # 注意要始终坚持使用带参数的SQL，而不是自己拼接SQL字符串，这样可以防止SQL注入攻击。
-            logging.debug(sql.replace('?', '%s'))
             await cur.execute(sql.replace('?', '%s'), args or ())
             if size:
                 result = await cur.fetchmany(size)
@@ -122,7 +121,7 @@ user = User(id=123, name='Michael')
 # 存入数据库:
 user.insert()
 # 查询所有User对象:
-users = User.findAll()
+users = User.findall()
 """
 
 

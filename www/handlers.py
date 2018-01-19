@@ -11,13 +11,10 @@ import time
 
 from aiohttp import web
 
-from apis import Page, APIError, APIValueError, APIPermissionError
+from apis import Page, APIError, APIValueError, APIPermissionError, APIResourceNotFoundError
 from config import configs
 from coroweb import get, post
 from models import User, Comment, Blog, next_id
-
-
-# import markdown2
 
 
 def check_admin(request):
@@ -26,7 +23,7 @@ def check_admin(request):
     :param request:
     :return:
     """
-    if request.__user__ is None or not request.__user__.admin:
+    if request.__user__ is None or (not request.__user__.admin):
         raise APIPermissionError()
 
 
@@ -96,8 +93,9 @@ async def cookie2user(cookie_str):
 
 
 def text2html(text):
-    lines = map(lambda s: '<p>%s</p>' % s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'),
-                filter(lambda s: s.strip() != '', text.split('\n')))
+    lines = map(
+        lambda s: '<p>%s</p>' % s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'),
+        filter(lambda s: s.strip() != '', text.split('\n')))
     return ''.join(lines)
 
 
@@ -105,12 +103,11 @@ def text2html(text):
 async def index(*, page='1'):
     page_index = get_page_index(page)
     num = await Blog.findNumber('count(id)')
-    page = Page(num)
+    page = Page(num, page_index)
     if num == 0:
         blogs = []
     else:
         blogs = await Blog.findall(orderBy='created_at desc', limit=(page.offset, page.limit))
-    print('@get index')
     return {
         '__template__': 'blogs.html',
         'page': page,
@@ -124,7 +121,7 @@ async def get_blog(id):
     comments = await Comment.findall('blog_id=?', [id], orderBy='created_at desc')
     for c in comments:
         c.html_content = text2html(c.content)
-    # blog.html_content = markdown2.markdown(blog.content)
+    blog.html_content = text2html(blog.content)
     return {
         '__template__': 'blog.html',
         'blog': blog,
@@ -132,76 +129,62 @@ async def get_blog(id):
     }
 
 
+@get('/manage/')
+def manage():
+    return 'redirect:/manage/comments'
+
+
+@get('/manage/comments')
+def manage_comments(*, page='1'):
+    return {
+        '__template__': 'manage_comments.html',
+        'page_index': get_page_index(page)
+    }
+
+
+@get('/manage/blogs')
+def manage_blogs(*, page='1'):
+    return {
+        '__template__': 'manage_blogs.html',
+        'page_index': get_page_index(page)
+    }
+
+
+@get('/manage/blogs/create')
+def manage_create_blog():
+    return {
+        '__template__': 'manage_blog_edit.html',
+        'id': '',
+        'action': '/api/blogs'
+    }
+
+
+@get('/manage/blogs/edit')
+def manage_edit_blog(*, id):
+    return {
+        '__template__': 'manage_blog_edit.html',
+        'id': id,
+        'action': '/api/blogs/%s' % id
+    }
+
+
+@get('/manage/users')
+def manage_users(*, page='1'):
+    return {
+        '__template__': 'manage_users.html',
+        'page_index': get_page_index(page)
+    }
+
+
 @get('/register')
-def register(request):
+def register():
     return {
         '__template__': 'register.html',
     }
 
 
-@get('/api/users')
-async def api_get_users(*, page='1'):
-    # page_index = get_page_index(page)
-    # item_count = await User.findNumber('count(id)')
-    # logging.debug('page_index is %d,item_count is  %d' % (page_index, item_count))
-    #
-    # p = Page(item_count, page_index)
-    # if item_count == 0:
-    #     return dict(page=p, users=())
-    # users = await User.findall(orderBy='created_at desc', limit=(p.offset, p.limit))
-    # for u in users:
-    #     u.passwd = '******'
-    # return dict(page=p, users=users)
-    users = await User.findall(orderBy='created_at desc')
-    for u in users:
-        u.passwd = '******'
-    return dict(users=users)
-
-
-@post('/api/users')
-async def api_register_user(*, email, name, passwd):
-    """
-    用户注册
-    用户管理是绝大部分Web网站都需要解决的问题。用户管理涉及到用户注册和登录。
-    用户注册相对简单，我们可以先通过API把用户注册这个功能实现了：
-    :param email:
-    :param name:
-    :param passwd:
-    :return:
-    """
-    _RE_EMAIL = re.compile(r'^[a-z0-9\.\-\_]+\@[a-z0-9\-\_]+(\.[a-z0-9\-\_]+){1,4}$')
-    _RE_SHA1 = re.compile(r'^[0-9a-f]{40}$')
-    if not name or not name.strip():
-        raise APIValueError('name')
-    if not email or not _RE_EMAIL.match(email):
-        raise APIValueError('email')
-    if not passwd or not _RE_SHA1.match(passwd):
-        raise APIValueError('passwd')
-    users = await User.findall('email=?', [email])
-    # 邮箱不能重复
-    if len(users) > 0:
-        raise APIError('register:failed', 'email', 'Email is already exist.')
-    uid = next_id()
-    sha1_passwd = '%s:%s' % (uid, passwd)
-    user = User(
-        id=uid,
-        name=name.strip(),
-        email=email,
-        passwd=hashlib.sha1(sha1_passwd.encode('utf-8')).hexdigest(),
-        image='http://www.gravatar.com/avatar/%s?d=mm&s=120' % hashlib.md5(email.encode('utf-8')).hexdigest()
-    )  # 密码用sha1加密
-    await user.save()
-    # make session cookie:
-    r = web.Response()
-    r.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
-    user.passwd = '******'
-    r.content_type = 'application/json'
-    r.body = json.dumps(user, ensure_ascii=False).encode('utf-8')
-    return r
-
-
 @get('/signin')
-def signin(request):
+def signin():
     return {
         '__template__': 'signin.html',
     }
@@ -239,11 +222,13 @@ async def authenticate(*, email, passwd):
     :param passwd:
     :return:
     """
+    logging.debug('authenticate...')
     if not email:
         raise APIValueError('email', 'Invalid email.')
     if not passwd:
         raise APIValueError('passwd', 'Invalid password.')
     users = await User.findall('email=?', [email])
+    logging.debug('the length of users is :%s' % len(users))
     if len(users) == 0:
         raise APIValueError('email', 'Email not exist.')
     user = users[0]
@@ -255,6 +240,80 @@ async def authenticate(*, email, passwd):
     if user.passwd != sha1.hexdigest():
         raise APIValueError('passwd', 'Invalid password.')
     # authenticate ok, set cookie:
+
+    auth_response = web.Response()
+    auth_response.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
+    user.passwd = '******'
+    auth_response.content_type = 'application/json'
+    # auth_response.headers['content_type'] = auth_response.content_type
+    auth_response.body = json.dumps(user, ensure_ascii=False).encode('utf-8')
+
+    logging.debug('%s authenticate success.' % user.email)
+    logging.debug(auth_response.cookies)
+    return auth_response
+
+
+@get('/signout')
+def signout(request):
+    referer = request.headers.get('Referer')
+    r = web.HTTPFound(referer or '/')
+    r.set_cookie(COOKIE_NAME, '-deleted-', max_age=0, httponly=True)
+    logging.info('user signed out.')
+    return r
+
+
+@get('/api/users')
+async def api_get_users(*, page='1'):
+    page_index = get_page_index(page)
+    item_count = await User.findNumber('count(id)')
+
+    p = Page(item_count, page_index)
+    if item_count == 0:
+        return dict(page=p, users=())
+    users = await User.findall(orderBy='created_at desc', limit=(p.offset, p.limit))
+    for u in users:
+        u.passwd = '******'
+    return dict(page=p, users=users)
+
+
+_RE_EMAIL = re.compile(r'^[a-z0-9\.\-\_]+\@[a-z0-9\-\_]+(\.[a-z0-9\-\_]+){1,4}$')
+_RE_SHA1 = re.compile(r'^[0-9a-f]{40}$')
+
+
+@post('/api/users')
+async def api_register_user(*, email, name, passwd):
+    """
+    用户注册
+    用户管理是绝大部分Web网站都需要解决的问题。用户管理涉及到用户注册和登录。
+    用户注册相对简单，我们可以先通过API把用户注册这个功能实现了：
+    :param email:
+    :param name:
+    :param passwd:
+    :return:
+    """
+
+    if not name or not name.strip():
+        raise APIValueError('name')
+    if not email or not _RE_EMAIL.match(email):
+        raise APIValueError('email')
+    if not passwd or not _RE_SHA1.match(passwd):
+        raise APIValueError('passwd')
+    users = await User.findall('email=?', [email])
+    # 邮箱不能重复
+    if len(users) > 0:
+        raise APIError('register:failed', 'email', 'Email is already exist.')
+    uid = next_id()
+    sha1_passwd = '%s:%s' % (uid, passwd)
+    user = User(
+        id=uid,
+        name=name.strip(),
+        email=email,
+        passwd=hashlib.sha1(sha1_passwd.encode('utf-8')).hexdigest(),
+        image='http://www.gravatar.com/avatar/%s?d=mm&s=120' % hashlib.md5(email.encode('utf-8')).hexdigest()
+    )  # 密码用sha1加密
+
+    await user.save()
+    # make session cookie:
     r = web.Response()
     r.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
     user.passwd = '******'
@@ -263,3 +322,102 @@ async def authenticate(*, email, passwd):
     return r
 
 
+@get('/api/blogs')
+async def api_blogs(*, page='1'):
+    page_index = get_page_index(page)
+    num = await Blog.findNumber('count(id)')
+    p = Page(num, page_index)
+    if num == 0:
+        return dict(page=p, blogs=())
+    blogs = await Blog.findall(orderBy='created_at desc', limit=(p.offset, p.limit))
+    return dict(page=p, blogs=blogs)
+
+
+@get('/api/blogs/{id}')
+async def api_get_blog(*, id):
+    blog = await Blog.find(id)
+    return blog
+
+
+@post('/api/blogs')
+async def api_create_blog(request, *, name, summary, content):
+    check_admin(request)
+    if not name or (not name.strip()):
+        raise APIValueError('name', 'name cannot be empty.')
+    if not summary or (not summary.strip()):
+        raise APIValueError('summary', 'summary cannot be empty.')
+    if not content or (not content.strip()):
+        raise APIValueError('content', 'content cannot be empty.')
+    blog = Blog(
+        user_id=request.__user__.id,
+        user_name=request.__user__.name,
+        user_image=request.__user__.image,
+        name=name.strip(),
+        summary=summary.strip(),
+        content=content.strip()
+    )
+    await blog.save()
+    return blog
+
+
+@post('/api/blogs/{id}/comments')
+async def api_create_comment(id, request, *, content):
+    user = request.__user__
+    if user is None:
+        raise APIPermissionError('Please signin first.')
+    if not content or not content.strip():
+        raise APIValueError('content')
+    blog = await Blog.find(id)
+    if blog is None:
+        raise APIResourceNotFoundError('Blog')
+    comment = Comment(blog_id=blog.id, user_id=user.id, user_name=user.name, user_image=user.image,
+                      content=content.strip())
+    logging.debug('create comment of %s:%s' % (blog.id, comment))
+    await comment.save()
+    return comment
+
+
+@post('/api/blogs/{id}')
+async def api_update_blog(id, request, *, name, summary, content):
+    check_admin(request)
+    blog = await Blog.find(id)
+    if not name or not name.strip():
+        raise APIValueError('name', 'name cannot be empty.')
+    if not summary or not summary.strip():
+        raise APIValueError('summary', 'summary cannot be empty.')
+    if not content or not content.strip():
+        raise APIValueError('content', 'content cannot be empty.')
+    blog.name = name.strip()
+    blog.summary = summary.strip()
+    blog.content = content.strip()
+    await blog.update()
+    return blog
+
+
+@post('/api/blogs/{id}/delete')
+async def api_delete_blog(request, *, id):
+    check_admin(request)
+    blog = await Blog.find(id)
+    await blog.remove()
+    return dict(id=id)
+
+
+@post('/api/comments/{id}/delete')
+async def api_delete_comments(id, request):
+    check_admin(request)
+    c = await Comment.find(id)
+    if c is None:
+        raise APIResourceNotFoundError('Comment')
+    await c.remove()
+    return dict(id=id)
+
+
+@get('/api/comments')
+async def api_comments(*, page='1'):
+    page_index = get_page_index(page)
+    num = await Comment.findNumber('count(id)')
+    p = Page(num, page_index)
+    if num == 0:
+        return dict(page=p, comments=())
+    comments = await Comment.findall(orderBy='created_at desc', limit=(p.offset, p.limit))
+    return dict(page=p, comments=comments)

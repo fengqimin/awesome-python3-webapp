@@ -16,7 +16,7 @@ from aiohttp import web
 from jinja2 import Environment, FileSystemLoader
 import orm
 from config import configs
-from coroweb import add_routes, add_static
+from coroweb import add_routes
 #
 # from handlers import cookie2user, COOKIE_NAME
 #
@@ -67,7 +67,7 @@ def init_jinja2(app, **kwargs):
 # 时间过滤器，显示登录时间
 def datetime_filter(t):
     delta = int(time.time() - t)
-    logging.debug('%s' % delta)
+
     if delta < 60:
         return u'1分钟前'
     if delta < 3600:
@@ -112,6 +112,7 @@ async def auth_factory(app, handler):
     :return:
     """
     from handlers import cookie2user, COOKIE_NAME
+
     async def auth(request):
         logging.info('check user: %s %s' % (request.method, request.path))
         request.__user__ = None
@@ -124,7 +125,6 @@ async def auth_factory(app, handler):
         if request.path.startswith('/manage/') and (request.__user__ is None or (not request.__user__.admin)):
             return web.HTTPFound('/signin')
         return await handler(request)
-
     return auth
 
 
@@ -155,7 +155,8 @@ async def response_factory(app, handler):
         # 结果:
         result = await handler(request)
         # 是web.Response对象，直接返回
-        if isinstance(request, web.StreamResponse):
+        if isinstance(result, web.StreamResponse):
+            logging.debug(request)
             return result
         # bytes，为二进制流
         if isinstance(result, bytes):
@@ -225,7 +226,7 @@ async def init(loop, host='127.0.0.1', port=9000):
     await orm.create_pool(loop=loop, **configs.db)
     app = web.Application(
         loop=loop,
-        middlewares=[logger_factory, auth_factory, response_factory])
+        middlewares=[logger_factory, auth_factory, response_factory, data_factory])
     init_jinja2(app, filters=dict(datetime=datetime_filter))
     add_routes(app, 'handlers')
     # add_static(app)

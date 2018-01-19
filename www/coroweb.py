@@ -260,10 +260,15 @@ class RequestHandler(object):
                     if not isinstance(params, dict):  # 如果request.json()返回的不是dict对象，返回400错误以及提示语
                         return web.HTTPBadRequest(text='JSON body must be  dict object.')
                     kwargs = params
-                elif content_type.startswith('application/x-www-form-urlencoded') \
-                        or content_type.startswith('multipart/form-data'):  # form表单请求的编码形式
+                elif content_type.startswith('application/x-www-form-urlencoded') or content_type.startswith('multipart/form-data'):  # form表单请求的编码形式
                     params = await request.post()  # 返回post的内容中解析后的数据。dict-like对象。
-                    kwargs = dict(**params)  # 组成dict，统一kw格式
+                    params = dict(**params)  # 组成dict，统一kw格式
+                    kwargs = dict()
+                    for key in params.keys():
+                        if isinstance(key, dict):
+                            for k, v in key.items():
+                                kwargs[k] = v
+                    logging.debug('form: %s to dict: %s ' % (params, kwargs))
                 else:
                     # 对于其他格式数据不予支持，报400错误
                     return web.HTTPBadRequest(text='Unsupported Content-Type: %s' % request.content_type)
@@ -287,15 +292,18 @@ class RequestHandler(object):
             # 若存在可变路由：/a/{name}/c，可匹配path为：/a/jack/c的request,则request.match_info返回{name = jack}
             kwargs = dict(**request.match_info)
         else:  # request中有参数，按照函数的参数要求，对kwargs中的参数进行处理
-            logging.debug('kwargs is %s' % request)
-            if not self._has_var_kw_arg and self._has_named_kw_args:  # 只有命名关键字参数
+            # logging.debug('_named_kw_args: %s' % self._named_kw_args)
+            if not self._has_var_kw_arg and self._named_kw_args:  # 只有命名关键字参数
+
                 copy = dict()
                 # 只保留命名关键词参数
                 for name in self._named_kw_args:
                     if name in kwargs:
                         copy[name] = kwargs[name]
                 kwargs = copy  # kw中只存在命名关键词参数
+                logging.debug('named kwargs is %s' % kwargs)
             # 将request.match_info中的参数传入kwargs
+            logging.debug('request.match_info is %s' % request.match_info)
             for k, v in request.match_info.items():
                 if k in kwargs:
                     logging.warning('Duplicate arg name in named arg and kw args: %s' % k)
@@ -303,6 +311,8 @@ class RequestHandler(object):
         # 有请求参数，把请求信息装入参数字典
         if self._has_request_arg:
             kwargs['request'] = request
+
+        logging.debug('all kwargs is %s' % kwargs)
 
         # 如果参数中有无默认值的命名关键字参数
         if self._required_kw_args:
@@ -448,6 +458,23 @@ def add_routes(app, module_name):
 
 
 if __name__ == '__main__':
+    def api_create_comment(id, request, *, content):
+        pass
+
+    fn = api_create_comment
+
+    has_request_arg = has_request_arg(fn)
+    has_var_kw_arg = has_var_kw_arg(fn)
+    has_named_kw_args = has_named_kw_args(fn)
+    named_kw_args = get_named_kw_args(fn)
+    required_kw_args = get_required_kw_args(fn)
+
+    print('has_request_arg:%s' % has_request_arg)
+    print('has_var_kw_arg:%s' % has_var_kw_arg)
+    print('has_named_kw_args:%s' % has_named_kw_args)
+    print('named_kw_args:%s' % named_kw_args)
+    print('required_kw_args:%s' % required_kw_args)
+
     pass
 
 

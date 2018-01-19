@@ -1,21 +1,64 @@
 <!DOCTYPE html>
+<!--
+{% macro pagination(url, page) %}
+    <ul class="uk-pagination">
+        {% if page.has_previous %}
+            <li><a href="{{ url }}{{ page.page_index - 1 }}"><i class="uk-icon-angle-double-left"></i></a></li>
+        {% else %}
+            <li class="uk-disabled"><span><i class="uk-icon-angle-double-left"></i></span></li>
+        {% endif %}
+            <li class="uk-active"><span>{{ page.page_index }}</span></li>
+        {% if page.has_next %}
+            <li><a href="{{ url }}{{ page.page_index + 1 }}"><i class="uk-icon-angle-double-right"></i></a></li>
+        {% else %}
+            <li class="uk-disabled"><span><i class="uk-icon-angle-double-right"></i></span></li>
+        {% endif %}
+    </ul>
+{% endmacro %}
+-->
 <html>
+
 <head>
-    <meta charset="utf-8" />
-    {% block meta %}<!-- block meta  -->{% endblock %}
+    <meta charset="utf-8"/>
+    {% block meta %}
+    <!-- block meta  -->
+    {% endblock %}
     <title>{% block title %} ? {% endblock %} - Awesome Python Webapp</title>
     <link rel="stylesheet" href="https://cdn.bootcss.com/uikit/2.27.4/css/uikit.min.css">
     <link rel="stylesheet" href="https://cdn.bootcss.com/uikit/2.27.4/css/uikit.gradient.min.css">
+    <style>
+a:hover, a:active {
+    text-decoration: none;
+}
+
+#vm {
+    display: none;
+}
+#loading {
+    margin-bottom: 15px;
+}
+#error {
+    display: none;
+    margin-bottom: 15px;
+}
+
+
+    </style>
     <script src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
-    <script src="https://cdn.bootcss.com/crypto-js/3.1.3/sha1.min.js"></script>
+    <script src="https://cdn.bootcss.com/crypto-js/3.1.2/components/core-min.js"></script>
+    <script src="https://cdn.bootcss.com/crypto-js/3.1.2/components/sha1-min.js"></script>
     <script src="https://cdn.bootcss.com/uikit/2.27.4/js/uikit.min.js"></script>
-    <script src="https://cdn.bootcss.com/sticky-js/1.2.0/sticky.min.js"></script>
+    <script src="https://cdn.bootcss.com/uikit/2.6.0/js/addons/sticky.min.js"></script>
     <script src="https://cdn.bootcss.com/vue/0.11.4/vue.min.js"></script>
     <script>
-        if (! window.console) {
+        // awesome.js
+
+        // patch for lower-version IE:
+
+        if (!window.console) {
             window.console = {
-                log: function() {},
-                info: function() {},
+                log: function () {},
+                info: function () {},
                 error: function () {},
                 warn: function () {},
                 debug: function () {}
@@ -24,71 +67,71 @@
 
         // patch for string.trim():
 
-        if (! String.prototype.trim) {
-            String.prototype.trim = function() {
+        if (!String.prototype.trim) {
+            String.prototype.trim = function () {
                 return this.replace(/^\s+|\s+$/g, '');
             };
         }
 
-        if (! Number.prototype.toDateTime) {
+        if (!Number.prototype.toDateTime) {
             var replaces = {
-                'yyyy': function(dt) {
+                'yyyy': function (dt) {
                     return dt.getFullYear().toString();
                 },
-                'yy': function(dt) {
+                'yy': function (dt) {
                     return (dt.getFullYear() % 100).toString();
                 },
-                'MM': function(dt) {
+                'MM': function (dt) {
                     var m = dt.getMonth() + 1;
                     return m < 10 ? '0' + m : m.toString();
                 },
-                'M': function(dt) {
+                'M': function (dt) {
                     var m = dt.getMonth() + 1;
                     return m.toString();
                 },
-                'dd': function(dt) {
+                'dd': function (dt) {
                     var d = dt.getDate();
                     return d < 10 ? '0' + d : d.toString();
                 },
-                'd': function(dt) {
+                'd': function (dt) {
                     var d = dt.getDate();
                     return d.toString();
                 },
-                'hh': function(dt) {
+                'hh': function (dt) {
                     var h = dt.getHours();
                     return h < 10 ? '0' + h : h.toString();
                 },
-                'h': function(dt) {
+                'h': function (dt) {
                     var h = dt.getHours();
                     return h.toString();
                 },
-                'mm': function(dt) {
+                'mm': function (dt) {
                     var m = dt.getMinutes();
                     return m < 10 ? '0' + m : m.toString();
                 },
-                'm': function(dt) {
+                'm': function (dt) {
                     var m = dt.getMinutes();
                     return m.toString();
                 },
-                'ss': function(dt) {
+                'ss': function (dt) {
                     var s = dt.getSeconds();
                     return s < 10 ? '0' + s : s.toString();
                 },
-                's': function(dt) {
+                's': function (dt) {
                     var s = dt.getSeconds();
                     return s.toString();
                 },
-                'a': function(dt) {
+                'a': function (dt) {
                     var h = dt.getHours();
                     return h < 12 ? 'AM' : 'PM';
                 }
             };
             var token = /([a-zA-Z]+)/;
-            Number.prototype.toDateTime = function(format) {
+            Number.prototype.toDateTime = function (format) {
                 var fmt = format || 'yyyy-MM-dd hh:mm:ss'
                 var dt = new Date(this * 1000);
                 var arr = fmt.split(token);
-                for (var i=0; i<arr.length; i++) {
+                for (var i = 0; i < arr.length; i++) {
                     var s = arr[i];
                     if (s && s in replaces) {
                         arr[i] = replaces[s](dt);
@@ -114,15 +157,15 @@
                 q = location.search,
                 r = {},
                 i, pos, s, qs;
-            if (q && q.charAt(0)==='?') {
+            if (q && q.charAt(0) === '?') {
                 qs = q.substring(1).split('&');
-                for (i=0; i<qs.length; i++) {
+                for (i = 0; i < qs.length; i++) {
                     s = qs[i];
                     pos = s.indexOf('=');
                     if (pos <= 0) {
                         continue;
                     }
-                    r[s.substring(0, pos)] = decodeURIComponent(s.substring(pos+1)).replace(/\+/g, ' ');
+                    r[s.substring(0, pos)] = decodeURIComponent(s.substring(pos + 1)).replace(/\+/g, ' ');
                 }
             }
             return r;
@@ -140,15 +183,14 @@
                 url = location.pathname;
             if (location.search) {
                 url = url + location.search + '&t=' + t;
-            }
-            else {
+            } else {
                 url = url + '?t=' + t;
             }
             location.assign(url);
         }
 
         function toSmartDate(timestamp) {
-            if (typeof(timestamp)==='string') {
+            if (typeof (timestamp) === 'string') {
                 timestamp = parseInt(timestamp);
             }
             if (isNaN(timestamp)) {
@@ -169,18 +211,15 @@
                     d = that.getDate(),
                     hh = that.getHours(),
                     mm = that.getMinutes();
-                s = y===today.getFullYear() ? '' : y + '年';
+                s = y === today.getFullYear() ? '' : y + '年';
                 s = s + m + '月' + d + '日' + hh + ':' + (mm < 10 ? '0' : '') + mm;
-            }
-            else if (t >= 86400000) {
+            } else if (t >= 86400000) {
                 // 1-6 days ago:
                 s = Math.floor(t / 86400000) + '天前';
-            }
-            else if (t >= 3600000) {
+            } else if (t >= 3600000) {
                 // 1-23 hours ago:
                 s = Math.floor(t / 3600000) + '小时前';
-            }
-            else if (t >= 60000) {
+            } else if (t >= 60000) {
                 s = Math.floor(t / 60000) + '分钟前';
             }
             return s;
@@ -188,8 +227,8 @@
 
 
 
-        $(function() {
-            $('.x-smartdate').each(function() {
+        $(function () {
+            $('.x-smartdate').each(function () {
                 $(this).removeClass('x-smartdate').text(toSmartDate($(this).attr('date')));
             });
         });
@@ -200,10 +239,13 @@
             var
                 fn,
                 match,
-                code = ['var r=[];\nvar _html = function (str) { return str.replace(/&/g, \'&amp;\').replace(/"/g, \'&quot;\').replace(/\'/g, \'&#39;\').replace(/</g, \'&lt;\').replace(/>/g, \'&gt;\'); };'],
+                code = [
+                    'var r=[];\nvar _html = function (str) { return str.replace(/&/g, \'&amp;\').replace(/"/g, \'&quot;\').replace(/\'/g, \'&#39;\').replace(/</g, \'&lt;\').replace(/>/g, \'&gt;\'); };'
+                ],
                 re = /\{\s*([a-zA-Z\.\_0-9()]+)(\s*\|\s*safe)?\s*\}/m,
                 addLine = function (text) {
-                    code.push('r.push(\'' + text.replace(/\'/g, '\\\'').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '\');');
+                    code.push('r.push(\'' + text.replace(/\'/g, '\\\'').replace(/\n/g, '\\n').replace(/\r/g, '\\r') +
+                        '\');');
                 };
             while (match = re.exec(tpl)) {
                 if (match.index > 0) {
@@ -211,8 +253,7 @@
                 }
                 if (match[2]) {
                     code.push('r.push(String(this.' + match[1] + '));');
-                }
-                else {
+                } else {
                     code.push('r.push(_html(String(this.' + match[1] + ')));');
                 }
                 tpl = tpl.substring(match.index + match[0].length);
@@ -236,7 +277,7 @@
                             $form = $(this),
                             $alert = $form && $form.find('.uk-alert-danger'),
                             fieldName = err && err.data;
-                        if (! $form.is('form')) {
+                        if (!$form.is('form')) {
                             console.error('Cannot call showFormError() on non-form object.');
                             return;
                         }
@@ -248,15 +289,18 @@
                             return;
                         }
                         if (err) {
-                            $alert.text(err.message ? err.message : (err.error ? err.error : err)).removeClass('uk-hidden').show();
+                            $alert.text(err.message ? err.message : (err.error ? err.error :
+                                err)).removeClass('uk-hidden').show();
                             if (($alert.offset().top - 60) < $(window).scrollTop()) {
-                                $('html,body').animate({ scrollTop: $alert.offset().top - 60 });
+                                $('html,body').animate({
+                                    scrollTop: $alert.offset().top - 60
+                                });
                             }
                             if (fieldName) {
-                                $form.find('[name=' + fieldName + ']').addClass('uk-form-danger');
+                                $form.find('[name=' + fieldName + ']').addClass(
+                                    'uk-form-danger');
                             }
-                        }
-                        else {
+                        } else {
                             $alert.addClass('uk-hidden').hide();
                             $form.find('.uk-form-danger').removeClass('uk-form-danger');
                         }
@@ -268,10 +312,11 @@
                             $form = $(this),
                             $submit = $form && $form.find('button[type=submit]'),
                             $buttons = $form && $form.find('button');
-                            $i = $submit && $submit.find('i'),
+                        $i = $submit && $submit.find('i'),
                             iconClass = $i && $i.attr('class');
-                        if (! $form.is('form')) {
-                            console.error('Cannot call showFormLoading() on non-form object.');
+                        if (!$form.is('form')) {
+                            console.error(
+                                'Cannot call showFormLoading() on non-form object.');
                             return;
                         }
                         if (!iconClass || iconClass.indexOf('uk-icon') < 0) {
@@ -281,15 +326,15 @@
                         if (isLoading) {
                             $buttons.attr('disabled', 'disabled');
                             $i && $i.addClass('uk-icon-spinner').addClass('uk-icon-spin');
-                        }
-                        else {
+                        } else {
                             $buttons.removeAttr('disabled');
-                            $i && $i.removeClass('uk-icon-spinner').removeClass('uk-icon-spin');
+                            $i && $i.removeClass('uk-icon-spinner').removeClass(
+                                'uk-icon-spin');
                         }
                     });
                 },
                 postJSON: function (url, data, callback) {
-                    if (arguments.length===2) {
+                    if (arguments.length === 2) {
                         callback = data;
                         data = {};
                     }
@@ -314,12 +359,13 @@
         function _httpJSON(method, url, data, callback) {
             var opt = {
                 type: method,
-                dataType: 'json'
+                method:method
+                // dataType: 'json'
             };
-            if (method==='GET') {
+            if (method === 'GET') {
                 opt.url = url + '?' + data;
             }
-            if (method==='POST') {
+            if (method === 'POST') {
                 opt.url = url;
                 opt.data = JSON.stringify(data || {});
                 opt.contentType = 'application/json';
@@ -330,16 +376,20 @@
                 }
                 return callback(null, r);
             }).fail(function (jqXHR, textStatus) {
-                return callback({'error': 'http_bad_response', 'data': '' + jqXHR.status, 'message': '网络好像出问题了 (HTTP ' + jqXHR.status + ')'});
+                return callback({
+                    'error': 'http_bad_response',
+                    'data': '' + jqXHR.status,
+                    'message': '网络好像出问题了 (HTTP ' + jqXHR.status + ')'
+                });
             });
         }
 
         function getJSON(url, data, callback) {
-            if (arguments.length===2) {
+            if (arguments.length === 2) {
                 callback = data;
                 data = {};
             }
-            if (typeof (data)==='object') {
+            if (typeof (data) === 'object') {
                 var arr = [];
                 $.each(data, function (k, v) {
                     arr.push(k + '=' + encodeURIComponent(v));
@@ -350,7 +400,7 @@
         }
 
         function postJSON(url, data, callback) {
-            if (arguments.length===2) {
+            if (arguments.length === 2) {
                 callback = data;
                 data = {};
             }
@@ -359,21 +409,22 @@
 
         // extends Vue:
 
-        if (typeof(Vue)!=='undefined') {
+        if (typeof (Vue) !== 'undefined') {
             Vue.filter('datetime', function (value) {
                 var d = value;
-                if (typeof(value)==='number') {
+                if (typeof (value) === 'number') {
                     d = new Date(value);
                 }
-                return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.getHours() + ':' + d.getMinutes();
+                return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.getHours() +
+                    ':' + d.getMinutes();
             });
             Vue.component('pagination', {
                 template: '<ul class="uk-pagination">' +
-                        '<li v-if="! has_previous" class="uk-disabled"><span><i class="uk-icon-angle-double-left"></i></span></li>' +
-                        '<li v-if="has_previous"><a v-attr="onclick:\'gotoPage(\' + (page_index-1) + \')\'" href="#0"><i class="uk-icon-angle-double-left"></i></a></li>' +
-                        '<li class="uk-active"><span v-text="page_index"></span></li>' +
-                        '<li v-if="! has_next" class="uk-disabled"><span><i class="uk-icon-angle-double-right"></i></span></li>' +
-                        '<li v-if="has_next"><a v-attr="onclick:\'gotoPage(\' + (page_index+1) + \')\'" href="#0"><i class="uk-icon-angle-double-right"></i></a></li>' +
+                    '<li v-if="! has_previous" class="uk-disabled"><span><i class="uk-icon-angle-double-left"></i></span></li>' +
+                    '<li v-if="has_previous"><a v-attr="onclick:\'gotoPage(\' + (page_index-1) + \')\'" href="#0"><i class="uk-icon-angle-double-left"></i></a></li>' +
+                    '<li class="uk-active"><span v-text="page_index"></span></li>' +
+                    '<li v-if="! has_next" class="uk-disabled"><span><i class="uk-icon-angle-double-right"></i></span></li>' +
+                    '<li v-if="has_next"><a v-attr="onclick:\'gotoPage(\' + (page_index+1) + \')\'" href="#0"><i class="uk-icon-angle-double-right"></i></a></li>' +
                     '</ul>'
             });
         }
@@ -383,7 +434,7 @@
                 hash_pos = url.indexOf('#'),
                 query_pos = url.indexOf('?'),
                 hash = '';
-            if (hash_pos >=0 ) {
+            if (hash_pos >= 0) {
                 hash = url.substring(hash_pos);
                 url = url.substring(0, hash_pos);
             }
@@ -418,10 +469,9 @@
                         console.log('postJSON failed: ' + JSON.stringify(err));
                         $submit.removeAttr('disabled');
                         fn_error ? fn_error() : showFormError($form, err);
-                    }
-                    else {
+                    } else {
                         var r = fn_success ? window[fn_success](result) : false;
-                        if (r===false) {
+                        if (r === false) {
                             $submit.removeAttr('disabled');
                         }
                     }
@@ -439,8 +489,8 @@
             });
         });
 
-        $(function() {
-            if (location.pathname === '/' || location.pathname.indexOf('/blog')===0) {
+        $(function () {
+            if (location.pathname === '/' || location.pathname.indexOf('/blog') === 0) {
                 $('li[data-url=blogs]').addClass('uk-active');
             }
         });
@@ -466,61 +516,76 @@
         function fatal(err) {
             _display_error($('#loading'), err);
         }
+
+
     </script>
-    {% block beforehead %}<!-- before head  -->{% endblock %}
+
+
+    {% block beforehead %} <!-- before head  -->{% endblock %}
 </head>
+
 <body>
-    <nav class="uk-navbar uk-navbar-attached uk-margin-bottom">
-        <div class="uk-container uk-container-center">
-            <a href="/" class="uk-navbar-brand">Awesome</a>
-            <ul class="uk-navbar-nav">
-                <li data-url="blogs"><a href="/"><i class="uk-icon-home"></i> 日志</a></li>
-                <li><a target="_blank" href="#"><i class="uk-icon-book"></i> 教程</a></li>
-                <li><a target="_blank" href="#"><i class="uk-icon-code"></i> 源码</a></li>
-            </ul>
-            <div class="uk-navbar-flip">
-                <ul class="uk-navbar-nav">
-                {% if user %}
-                    <li class="uk-parent" data-uk-dropdown>
-                        <a href="#0"><i class="uk-icon-user"></i> {{ user.name }}</a>
-                        <div class="uk-dropdown uk-dropdown-navbar">
-                            <ul class="uk-nav uk-nav-navbar">
-                                <li><a href="/signout"><i class="uk-icon-sign-out"></i> 登出</a></li>
-                            </ul>
-                        </div>
-                    </li>
-                {% else %}
-                    <li><a href="/signin"><i class="uk-icon-sign-in"></i> 登录</a></li>
-                    <li><a href="/register"><i class="uk-icon-edit"></i> 注册</a></li>
-                {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
-
+<nav class="uk-navbar uk-navbar-attached uk-margin-bottom">
     <div class="uk-container uk-container-center">
-        <div class="uk-grid">
-            <!-- content -->
-            {% block content %}
-            {% endblock %}
-            <!-- // content -->
+        <a href="/" class="uk-navbar-brand">Awesome</a>
+        <ul class="uk-navbar-nav">
+            <li data-url="blogs"><a href="/"><i class="uk-icon-home"></i> 日志</a></li>
+            <li><a target="_blank"
+                   href="http://www.liaoxuefeng.com/wiki/0014316089557264a6b348958f449949df42a6d3a2e542c000"><i
+                    class="uk-icon-book"></i> 教程</a></li>
+            <li><a target="_blank" href="https://github.com/michaelliao/awesome-python3-webapp"><i
+                    class="uk-icon-code"></i> 源码</a></li>
+        </ul>
+        <div class="uk-navbar-flip">
+            <ul class="uk-navbar-nav">
+                {% if __user__ %}
+                <li class="uk-parent" data-uk-dropdown>
+                    <a href="#0"><i class="uk-icon-user"></i> {{ __user__.name }}</a>
+                    <div class="uk-dropdown uk-dropdown-navbar">
+                        <ul class="uk-nav uk-nav-navbar">
+                            <li><a href="/signout"><i class="uk-icon-sign-out"></i> 登出</a></li>
+                            {% if __user__.admin %}
+                            <li><a href="/manage/blogs"><i class="uk-icon-sign-out"></i> 管理</a></li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </li>
+                {% else %}
+                <li><a href="/signin"><i class="uk-icon-sign-in"></i> 登录</a></li>
+                <li><a href="/register"><i class="uk-icon-edit"></i> 注册</a></li>
+                {% endif %}
+            </ul>
         </div>
     </div>
+</nav>
 
-    <div class="uk-margin-large-top" style="background-color:#eee; border-top:1px solid #ccc;">
-        <div class="uk-container uk-container-center uk-text-center">
-            <div class="uk-panel uk-margin-top uk-margin-bottom">
-                <p>
-                    <a target="_blank" href="#" class="uk-icon-button uk-icon-weibo"></a>
-                    <a target="_blank" href="#" class="uk-icon-button uk-icon-github"></a>
-                    <a target="_blank" href="#" class="uk-icon-button uk-icon-linkedin-square"></a>
-                    <a target="_blank" href="#" class="uk-icon-button uk-icon-twitter"></a>
-                </p>
-                <p>Powered by <a href="#">Awesome Python Webapp</a>. Copyright &copy; 2014. [<a href="/manage/" target="_blank">Manage</a>]</p>
-                <p><a href="http://www.liaoxuefeng.com/" target="_blank">www.liaoxuefeng.com</a>. All rights reserved.</p>
-                <a target="_blank" href="#"><i class="uk-icon-html5" style="font-size:64px; color: #444;"></i></a>
-            </div>
-        </div>
+<div class="uk-container uk-container-center">
+    <div class="uk-grid">
+        <!-- content -->
+        {% block content %}
+        {% endblock %}
+        <!-- // content -->
     </div>
+</div>
+
+<div class="uk-margin-large-top" style="background-color:#eee; border-top:1px solid #ccc;">
+    <div class="uk-container uk-container-center uk-text-center">
+        <div class="uk-panel uk-margin-top uk-margin-bottom">
+            <p>
+                <a target="_blank" href="http://weibo.com/liaoxuefeng" class="uk-icon-button uk-icon-weibo"></a>
+                <a target="_blank" href="https://github.com/michaelliao" class="uk-icon-button uk-icon-github"></a>
+                <a target="_blank" href="http://www.linkedin.com/in/liaoxuefeng"
+                   class="uk-icon-button uk-icon-linkedin-square"></a>
+                <a target="_blank" href="https://twitter.com/liaoxuefeng" class="uk-icon-button uk-icon-twitter"></a>
+            </p>
+            <p>Powered by <a href="http://awesome.liaoxuefeng.com">Awesome Python Webapp</a>. Copyright &copy; 2014. [<a
+                    href="/manage/" target="_blank">Manage</a>]</p>
+            <p><a href="http://www.liaoxuefeng.com/" target="_blank">www.liaoxuefeng.com</a>. All rights reserved.</p>
+            <a target="_blank" href="http://www.w3.org/TR/html5/"><i class="uk-icon-html5"
+                                                                     style="font-size:64px; color: #444;"></i></a>
+        </div>
+
+    </div>
+</div>
 </body>
 </html>
